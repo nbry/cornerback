@@ -1,0 +1,7 @@
+[workspace]
+members = [
+  "cornerback-core",
+  "cornerback-postgres-eventstore",
+  "cornerbackd",
+]
+resolver = "2"
