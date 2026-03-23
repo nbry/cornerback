@@ -30,6 +30,7 @@ impl InMemoryEventStore {
     }
 }
 
+// Simple in-memory implementation of EventStore, primiarily for testing purposes.
 #[async_trait]
 impl EventStore for InMemoryEventStore {
     async fn insert_event(&self, new_event: NewEvent) -> anyhow::Result<Event> {
@@ -70,26 +71,44 @@ impl EventStore for InMemoryEventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Context;
 
     #[tokio::test]
-    async fn test_in_memory_event_store() {
+    async fn test_in_memory_event_store() -> anyhow::Result<()> {
         let store = InMemoryEventStore {
             events: tokio::sync::Mutex::new(vec![]),
         };
 
-        let new_event = NewEvent {
+        let incoming_event_1 = NewEvent {
             webhook_id: "test-webhook".to_string(),
             headers: serde_json::json!({ "Content-Type": "application/json" }),
             body: serde_json::json!({ "message": "Hello, World!" }),
         };
 
-        let event = store.insert_event(new_event).await.unwrap();
-        assert_eq!(event.webhook_id, "test-webhook");
-        assert_eq!(event.headers["Content-Type"], "application/json");
-        assert_eq!(event.body["message"], "Hello, World!");
+        let incoming_event_2 = NewEvent {
+            webhook_id: "test-webhook".to_string(),
+            headers: serde_json::json!({ "Content-Type": "application/json" }),
+            body: serde_json::json!({ "message": "Hello again!" }),
+        };
 
-        let fetched_event = store.get_event(event.id).await.unwrap().unwrap();
-        assert_eq!(fetched_event.id, event.id);
+        let event_1 = store.insert_event(incoming_event_1).await?;
+        let event_2 = store.insert_event(incoming_event_2).await?;
+
+        assert_eq!(event_1.webhook_id, "test-webhook");
+        assert_eq!(event_1.headers["Content-Type"], "application/json");
+        assert_eq!(event_1.body["message"], "Hello, World!");
+
+        let fetched_event_1 = store
+            .get_event(event_1.id)
+            .await?
+            .context("expected event_1 to exist in store")?;
+        assert_eq!(fetched_event_1.id, event_1.id);
+
+        let fetched_event_2 = store
+            .get_event(event_2.id)
+            .await?
+            .context("expected event_2 to exist in store")?;
+        assert_eq!(fetched_event_2.id, event_2.id);
 
         let events = store
             .list_events(
@@ -99,8 +118,9 @@ mod tests {
                     offset: None,
                 },
             )
-            .await
-            .unwrap();
-        assert_eq!(events.len(), 1);
+            .await?;
+        assert_eq!(events.len(), 2);
+
+        Ok(())
     }
 }
