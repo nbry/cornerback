@@ -3,25 +3,25 @@ use axum::{
     extract::{Path, State},
     routing::{get, post},
 };
-use std::sync::Arc;
 
+use crate::app::RouteState;
 use cornerback_core::models::NewEvent;
-use cornerback_core::store::EventStore;
 
-pub fn router(store: Arc<dyn EventStore>) -> Router {
+pub fn router(state: RouteState) -> Router {
     Router::new()
         .route("/webhook/:id", post(handle_event))
         .route("/webhook/:id/events", get(list_webhook_events))
         .route("/events/:id", get(get_event))
-        .with_state(store)
+        .with_state(state)
 }
 
 async fn handle_event(
     Path(webhook_id): Path<String>,
-    State(store): State<Arc<dyn EventStore>>,
+    State(state): State<RouteState>,
     Json(payload): Json<serde_json::Value>,
 ) -> Json<serde_json::Value> {
-    let event = store
+    let event = state
+        .store
         .insert_event(NewEvent {
             webhook_id,
             headers: serde_json::json!({}),
@@ -35,9 +35,9 @@ async fn handle_event(
 
 async fn get_event(
     Path(id): Path<uuid::Uuid>,
-    State(store): State<Arc<dyn EventStore>>,
+    State(state): State<RouteState>,
 ) -> Json<serde_json::Value> {
-    let event = store.get_event(id).await.unwrap();
+    let event = state.store.get_event(id).await.unwrap();
 
     Json(serde_json::json!(event))
 }
@@ -46,9 +46,10 @@ async fn get_event(
 
 async fn list_webhook_events(
     Path(webhook_id): Path<String>,
-    State(store): State<Arc<dyn EventStore>>,
+    State(state): State<RouteState>,
 ) -> Json<serde_json::Value> {
-    let events = store
+    let events = state
+        .store
         .list_events(
             &webhook_id,
             cornerback_core::store::Paging {
@@ -60,4 +61,41 @@ async fn list_webhook_events(
         .unwrap();
 
     Json(serde_json::json!(events))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use cornerback_core::store::InMemoryEventStore;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn test_handle_event() {
+        let store = Arc::new(InMemoryEventStore::new());
+        let route_state = RouteState { store };
+        let app = router(route_state);
+
+        let payload = serde_json::json!({ "foo": "bar" });
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/webhook/test")
+                    .header("Content-Type", "application/json")
+                    .body(axum::body::Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), 200);
+
+        let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(body_json.get("id").is_some());
+    }
 }

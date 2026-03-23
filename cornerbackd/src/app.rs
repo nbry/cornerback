@@ -7,6 +7,11 @@ use cornerback_postgres_eventstore::store::PostgresEventStore;
 
 use crate::routes;
 
+#[derive(Clone)]
+pub struct RouteState {
+    pub store: Arc<dyn EventStore>,
+}
+
 pub async fn build_app() -> anyhow::Result<Router> {
     let db_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/cornerback".into());
@@ -15,5 +20,7 @@ pub async fn build_app() -> anyhow::Result<Router> {
 
     let store: Arc<dyn EventStore> = Arc::new(PostgresEventStore::new(pool));
 
-    Ok(routes::router(store))
+    let route_state = RouteState { store };
+
+    Ok(routes::router(route_state))
 }

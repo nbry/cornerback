@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 pub type EventId = Uuid;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Event {
     pub id: EventId,
     pub webhook_id: String,
