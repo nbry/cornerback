@@ -23,6 +23,7 @@ pub trait Channel<T: Event>: Send + Sync {
 ```
 
 Each channel:
+
 1. Receives an event
 2. Processes it
 3. Calls `next.send(event)` to forward
@@ -94,27 +95,6 @@ let splitter = SplitterChannel::new(
 );
 
 splitter.send(event).await?;
-```
-
-### BufferChannel
-
-Buffers events with time and size-based flushing.
-
-```rust
-let buffer = BufferChannel::new(
-    "batch_collect",
-    BufferConfig {
-        max_size: 100,
-        max_age: Duration::from_secs(5),
-    },
-    |batch| {
-        Box::pin(async move {
-            println!("Flushing batch of {}", batch.len());
-        })
-    }
-);
-
-buffer.buffer(event).await?;
 ```
 
 ### JoinChannel
@@ -244,6 +224,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 Output:
+
 ```
 ✓ Processed: evt-123 (high)
 ✓ Processed: evt-123 (high)  // sent twice due to split
@@ -273,17 +254,18 @@ filter.send(event).await
 
 ## Comparison: Old vs New
 
-| Pattern | Old | New |
-|---------|-----|-----|
-| Composition | Manual `.process()` calls | Automatic chain calls |
-| Direction | Build left-to-right | Build right-to-left (from terminal) |
-| Error Handling | Returns Result | Stops chain at error |
-| Type Safety | Runtime value passing | Compile-time generic types |
-| Tracing | Manual in handlers | Automatic in channels |
+| Pattern        | Old                       | New                                 |
+| -------------- | ------------------------- | ----------------------------------- |
+| Composition    | Manual `.process()` calls | Automatic chain calls               |
+| Direction      | Build left-to-right       | Build right-to-left (from terminal) |
+| Error Handling | Returns Result            | Stops chain at error                |
+| Type Safety    | Runtime value passing     | Compile-time generic types          |
+| Tracing        | Manual in handlers        | Automatic in channels               |
 
 ## When to Use
 
 ✅ **Great For:**
+
 - Webhook pipelines
 - Event processing streams
 - Request enrichment
@@ -291,6 +273,7 @@ filter.send(event).await
 - Batch processing workflows
 
 ❌ **Not For:**
+
 - Simple one-off logic (overhead not justified)
 - Standalone operations (use plain async functions)
 

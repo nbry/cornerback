@@ -16,9 +16,3 @@ pub trait EventChannel<T: Event>: Send + Sync {
     /// Send an event through this channel to the next
     fn send(&self, event: T) -> BoxFuture<'static, Result<(), String>>;
 }
-
-/// Trait for channels that can buffer events
-pub trait BufferingChannel<T: Event>: Send + Sync {
-    /// Buffer an event, returns batch if ready for processing
-    fn buffer(&self, event: T) -> BoxFuture<'static, Option<Vec<T>>>;
-}
