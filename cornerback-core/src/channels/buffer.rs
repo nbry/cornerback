@@ -1,4 +1,4 @@
-use crate::channels::core::Event;
+use crate::channels::{channel_span_name, core::Event};
 use futures::future::BoxFuture;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -58,7 +58,7 @@ where
             config,
             buffer: Arc::new(RwLock::new(Vec::new())),
             last_flush: Arc::new(RwLock::new(Instant::now())),
-            span_name: span_name.into(),
+            span_name: channel_span_name(span_name, "buffer_channel"),
             handler,
         })
     }

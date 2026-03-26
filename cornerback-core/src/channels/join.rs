@@ -1,4 +1,4 @@
-use crate::channels::core::Event;
+use crate::channels::{channel_span_name, core::Event};
 use futures::future::BoxFuture;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -43,7 +43,7 @@ impl<T: Event + 'static> JoinChannel<T> {
             buffer: Arc::new(RwLock::new(Vec::new())),
             join_predicate,
             merger,
-            span_name: span_name.into(),
+            span_name: channel_span_name(span_name, "join_channel"),
         })
     }
 

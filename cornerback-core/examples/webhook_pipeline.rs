@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         })
     });
-    let logger: Arc<dyn Channel<WebhookEvent>> = Arc::new(logger);
+    let logger: Arc<dyn EventChannel<WebhookEvent>> = Arc::new(logger);
 
     // 2. TRANSFORM: Enrich the event
     let enricher = TransformChannel::new(
@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         logger,
     );
-    let enricher: Arc<dyn Channel<WebhookEvent>> = Arc::new(enricher);
+    let enricher: Arc<dyn EventChannel<WebhookEvent>> = Arc::new(enricher);
 
     // 3. FILTER: Only high priority
     let filter = FilterChannel::new(
@@ -63,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         enricher,
     );
-    let filter: Arc<dyn Channel<WebhookEvent>> = Arc::new(filter);
+    let filter: Arc<dyn EventChannel<WebhookEvent>> = Arc::new(filter);
 
     println!("\n📋 Pipeline Structure:");
     println!("  filter → enricher → logger");

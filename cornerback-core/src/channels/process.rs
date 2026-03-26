@@ -1,4 +1,4 @@
-use crate::channels::core::{Channel, Event};
+use crate::channels::{channel_span_name, core::{Event, EventChannel}};
 use futures::future::BoxFuture;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -36,7 +36,7 @@ where
     pub fn new<S: Into<String>>(span_name: S, handler: H) -> Arc<Self> {
         Arc::new(Self {
             handler,
-            span_name: span_name.into(),
+            span_name: channel_span_name(span_name, "process_channel"),
             _phantom: PhantomData,
         })
     }
@@ -60,7 +60,7 @@ where
     }
 }
 
-impl<T, H> Channel<T> for Arc<ProcessChannel<T, H>>
+impl<T, H> EventChannel<T> for Arc<ProcessChannel<T, H>>
 where
     T: Event,
     H: Fn(T) -> BoxFuture<'static, ()> + Send + Sync + 'static,

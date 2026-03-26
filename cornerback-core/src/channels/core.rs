@@ -12,7 +12,7 @@ impl<T: Clone + Send + Sync + 'static> Event for Vec<T> where T: Event {}
 /// Core trait that all channels implement
 ///
 /// Channels form a chain where each sends to the next channel
-pub trait Channel<T: Event>: Send + Sync {
+pub trait EventChannel<T: Event>: Send + Sync {
     /// Send an event through this channel to the next
     fn send(&self, event: T) -> BoxFuture<'static, Result<(), String>>;
 }

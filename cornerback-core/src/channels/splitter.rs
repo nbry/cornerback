@@ -1,4 +1,4 @@
-use crate::channels::core::{Channel, Event};
+use crate::channels::{channel_span_name, core::{EventChannel, Event}};
 use futures::future::BoxFuture;
 use std::sync::Arc;
 
@@ -26,7 +26,7 @@ pub type Splitter<T> = Arc<dyn Fn(T) -> BoxFuture<'static, Result<Vec<T>, String
 pub struct SplitterChannel<T: Event> {
     splitter: Splitter<T>,
     span_name: String,
-    next: Arc<dyn Channel<T>>,
+    next: Arc<dyn EventChannel<T>>,
 }
 
 impl<T: Event + 'static> SplitterChannel<T> {
@@ -34,14 +34,14 @@ impl<T: Event + 'static> SplitterChannel<T> {
     pub fn new<S: Into<String>, F>(
         span_name: S,
         splitter: F,
-        next: Arc<dyn Channel<T>>,
+        next: Arc<dyn EventChannel<T>>,
     ) -> Arc<Self>
     where
         F: Fn(T) -> BoxFuture<'static, Result<Vec<T>, String>> + Send + Sync + 'static,
     {
         Arc::new(Self {
             splitter: Arc::new(splitter),
-            span_name: span_name.into(),
+            span_name: channel_span_name(span_name, "splitter_channel"),
             next,
         })
     }
@@ -77,7 +77,7 @@ impl<T: Event + 'static> SplitterChannel<T> {
     }
 }
 
-impl<T: Event + 'static> Channel<T> for Arc<SplitterChannel<T>> {
+impl<T: Event + 'static> EventChannel<T> for Arc<SplitterChannel<T>> {
     fn send(&self, event: T) -> BoxFuture<'static, Result<(), String>> {
         let this = self.clone();
         Box::pin(async move { this.process_with_span(event).await })

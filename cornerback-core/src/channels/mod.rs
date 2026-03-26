@@ -10,7 +10,6 @@
 /// - ProcessChannel: Terminal handler that executes business logic
 /// - BufferChannel: Buffers events with batching
 /// - JoinChannel: Combines multiple events into one
-
 pub mod buffer;
 pub mod core;
 pub mod filter;
@@ -19,8 +18,12 @@ pub mod process;
 pub mod splitter;
 pub mod transform;
 
+pub(crate) fn channel_span_name<S: Into<String>>(span_name: S, channel_suffix: &str) -> String {
+    format!("{}_{}", span_name.into(), channel_suffix)
+}
+
 pub use buffer::BufferChannel;
-pub use core::{Channel, Event};
+pub use core::{Event, EventChannel};
 pub use filter::FilterChannel;
 pub use join::JoinChannel;
 pub use process::ProcessChannel;

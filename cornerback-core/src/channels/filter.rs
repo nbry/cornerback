@@ -1,4 +1,7 @@
-use crate::channels::core::{Channel, Event};
+use crate::channels::{
+    channel_span_name,
+    core::{Event, EventChannel},
+};
 use futures::future::BoxFuture;
 use std::sync::Arc;
 
@@ -23,7 +26,7 @@ use std::sync::Arc;
 pub struct FilterChannel<T: Event, F: Fn(&T) -> bool + Send + Sync> {
     predicate: F,
     span_name: String,
-    next: Arc<dyn Channel<T>>,
+    next: Arc<dyn EventChannel<T>>,
     rejection_handler: Option<Arc<dyn Fn(T) -> BoxFuture<'static, ()> + Send + Sync>>,
 }
 
@@ -36,11 +39,11 @@ where
     pub fn new<S: Into<String>>(
         span_name: S,
         predicate: F,
-        next: Arc<dyn Channel<T>>,
+        next: Arc<dyn EventChannel<T>>,
     ) -> Arc<Self> {
         Arc::new(Self {
             predicate,
-            span_name: span_name.into(),
+            span_name: channel_span_name(span_name, "filter_channel"),
             next,
             rejection_handler: None,
         })
@@ -83,7 +86,7 @@ where
     }
 }
 
-impl<T, F> Channel<T> for Arc<FilterChannel<T, F>>
+impl<T, F> EventChannel<T> for Arc<FilterChannel<T, F>>
 where
     T: Event,
     F: Fn(&T) -> bool + Send + Sync + 'static,
