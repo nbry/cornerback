@@ -31,7 +31,7 @@ pub async fn process_event_request(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let replay_requested = header_flag(&request_headers, X_CORNERBACK_REPLAY_HEADER);
 
-    if replay_requested {
+    let event = if replay_requested {
         let event_id = payload.id.ok_or_else(|| {
             (
                 StatusCode::BAD_REQUEST,
@@ -46,7 +46,6 @@ pub async fn process_event_request(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
             .ok_or_else(|| (StatusCode::NOT_FOUND, "Event not found".into()))?;
 
-        event.created_at = chrono::Utc::now();
         event = event.add_header(X_CORNERBACK_REPLAY_HEADER, "true");
 
         state
@@ -55,18 +54,19 @@ pub async fn process_event_request(
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-        return Ok(Json(serde_json::json!(event)));
-    }
-
-    let event = state
-        .store
-        .insert_event(NewEvent {
-            webhook_id,
-            headers: payload.headers,
-            body: payload.body,
-        })
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        event
+    } else {
+        let event = state
+            .store
+            .insert_event(NewEvent {
+                webhook_id,
+                headers: payload.headers,
+                body: payload.body,
+            })
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        event
+    };
 
     let send_to_target = state.config.send_to_target_by_default
         || header_flag(&request_headers, X_CORNERBACK_SEND_TARGET_HEADER);

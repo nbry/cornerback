@@ -21,7 +21,7 @@ impl EventStore for PostgresEventStore {
             r#"
             INSERT INTO events (id, webhook_id, headers, body)
             VALUES (gen_random_uuid(), $1, $2, $3)
-            RETURNING id, webhook_id, headers, body, created_at
+            RETURNING id, webhook_id, headers, body, created_at, updated_at
             "#,
         )
         .bind(event.webhook_id)
@@ -36,6 +36,7 @@ impl EventStore for PostgresEventStore {
             headers: rec.try_get("headers")?,
             body: rec.try_get("body")?,
             created_at: rec.try_get("created_at")?,
+            updated_at: rec.try_get("updated_at")?,
         })
     }
 
@@ -57,6 +58,7 @@ impl EventStore for PostgresEventStore {
                 headers: row.try_get("headers")?,
                 body: row.try_get("body")?,
                 created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
             })),
             None => Ok(None),
         }
@@ -69,7 +71,7 @@ impl EventStore for PostgresEventStore {
     ) -> Result<Vec<Event>> {
         let rows = sqlx::query(
             r#"
-            SELECT id, webhook_id, headers, body, created_at
+            SELECT id, webhook_id, headers, body, created_at, updated_at
             FROM events            WHERE webhook_id = $1
             ORDER BY created_at DESC
             LIMIT COALESCE($2, 100)
@@ -91,6 +93,7 @@ impl EventStore for PostgresEventStore {
                     headers: row.try_get("headers")?,
                     body: row.try_get("body")?,
                     created_at: row.try_get("created_at")?,
+                    updated_at: row.try_get("updated_at")?,
                 })
             })
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -102,7 +105,7 @@ impl EventStore for PostgresEventStore {
         let result = sqlx::query(
             r#"
             UPDATE events
-            SET webhook_id = $1, headers = $2, body = $3
+            SET webhook_id = $1, headers = $2, body = $3, updated_at = NOW()
             WHERE id = $4
             "#,
         )

@@ -43,6 +43,7 @@ impl EventStore for InMemoryEventStore {
             headers: new_event.headers,
             body: new_event.body,
             created_at: chrono::Utc::now(),
+            updated_at: None,
         };
         events.push(event.clone());
         Ok(event)
@@ -73,6 +74,7 @@ impl EventStore for InMemoryEventStore {
         let mut events = self.events.lock().await;
         if let Some(existing_event) = events.iter_mut().find(|e| e.id == event.id) {
             *existing_event = event;
+            existing_event.updated_at = Some(chrono::Utc::now());
             Ok(())
         } else {
             Err(anyhow::anyhow!("Event not found"))

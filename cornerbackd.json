@@ -1,0 +1,11 @@
+{
+  "name": "cornerbackd",
+  "target_server": {
+    "url": "http://localhost:3000/webhooks/ingest",
+    "headers": {}
+  },
+  "event_store": {
+    "type": "in_memory"
+  },
+  "send_to_target_by_default": false
+}

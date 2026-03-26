@@ -11,6 +11,7 @@ pub struct Event {
     pub headers: Value,
     pub body: Value,
     pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl Event {
@@ -21,6 +22,7 @@ impl Event {
             headers,
             body,
             created_at: chrono::Utc::now(),
+            updated_at: None,
         }
     }
 

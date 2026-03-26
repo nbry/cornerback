@@ -6,7 +6,8 @@ CREATE TABLE events(
     webhook_id text NOT NULL,
     headers jsonb NOT NULL,
     body jsonb NOT NULL,
-    created_at timestamptz DEFAULT now()
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz
 );
 
 INSERT INTO events(id, webhook_id, headers, body)
