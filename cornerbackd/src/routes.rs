@@ -1,17 +1,22 @@
 use axum::{
     Json, Router,
     extract::{Path, State},
+    http::StatusCode,
     routing::{get, post},
 };
+use serde::Deserialize;
 
 use crate::app::RouteState;
 use cornerback_core::models::NewEvent;
+
+const X_CORNERBACK_REPLAY_HEADER: &str = "x-cornerback-replay";
 
 pub fn router(state: RouteState) -> Router {
     Router::new()
         .route("/webhook/:id", post(handle_event))
         .route("/webhook/:id/events", get(list_webhook_events))
         .route("/events/:id", get(get_event))
+        .route("/events/:id/replay", post(replay_event))
         .with_state(state)
 }
 
@@ -19,7 +24,7 @@ async fn handle_event(
     Path(webhook_id): Path<String>,
     State(state): State<RouteState>,
     Json(payload): Json<serde_json::Value>,
-) -> Json<serde_json::Value> {
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let event = state
         .store
         .insert_event(NewEvent {
@@ -28,26 +33,52 @@ async fn handle_event(
             body: payload,
         })
         .await
-        .unwrap();
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Json(serde_json::json!({ "id": event.id }))
+    Ok(Json(serde_json::json!({ "id": event.id })))
 }
 
 async fn get_event(
-    Path(id): Path<uuid::Uuid>,
+    Path(event_id): Path<uuid::Uuid>,
     State(state): State<RouteState>,
-) -> Json<serde_json::Value> {
-    let event = state.store.get_event(id).await.unwrap();
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let event = state
+        .store
+        .get_event(event_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "Event not found".into()))?;
 
-    Json(serde_json::json!(event))
+    Ok(Json(serde_json::json!(event)))
 }
 
-// async fn replay_event() {}
+#[derive(Deserialize)]
+struct ReplayPayload {
+    #[allow(dead_code)]
+    redirect_uri: String,
+}
+
+async fn replay_event(
+    Path(event_id): Path<uuid::Uuid>,
+    State(state): State<RouteState>,
+    Json(_payload): Json<ReplayPayload>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let mut event = state
+        .store
+        .get_event(event_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "Event not found".into()))?;
+
+    event.add_header(X_CORNERBACK_REPLAY_HEADER, "true");
+
+    Ok(Json(serde_json::json!(event)))
+}
 
 async fn list_webhook_events(
     Path(webhook_id): Path<String>,
     State(state): State<RouteState>,
-) -> Json<serde_json::Value> {
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let events = state
         .store
         .list_events(
@@ -58,9 +89,9 @@ async fn list_webhook_events(
             },
         )
         .await
-        .unwrap();
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Json(serde_json::json!(events))
+    Ok(Json(serde_json::json!(events)))
 }
 
 #[cfg(test)]

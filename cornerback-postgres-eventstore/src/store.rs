@@ -97,4 +97,43 @@ impl EventStore for PostgresEventStore {
 
         Ok(recs)
     }
+
+    async fn update_event(&self, event: Event) -> Result<()> {
+        let result = sqlx::query(
+            r#"
+            UPDATE events
+            SET webhook_id = $1, headers = $2, body = $3
+            WHERE id = $4
+            "#,
+        )
+        .bind(event.webhook_id)
+        .bind(event.headers)
+        .bind(event.body)
+        .bind(event.id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            Err(anyhow::anyhow!("Event not found"))
+        } else {
+            Ok(())
+        }
+    }
+
+    async fn delete_event(&self, id: EventId) -> Result<()> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM events WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            Err(anyhow::anyhow!("Event not found"))
+        } else {
+            Ok(())
+        }
+    }
 }

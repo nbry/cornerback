@@ -250,6 +250,7 @@ dependencies = [
  "cornerback-core",
  "cornerback-postgres-eventstore",
  "hyper",
+ "serde",
  "serde_json",
  "sqlx",
  "tokio",

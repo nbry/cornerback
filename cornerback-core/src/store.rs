@@ -11,6 +11,8 @@ pub trait EventStore: Send + Sync {
     async fn insert_event(&self, event: NewEvent) -> anyhow::Result<Event>;
     async fn get_event(&self, id: EventId) -> anyhow::Result<Option<Event>>;
     async fn list_events(&self, webhook_id: &str, paging: Paging) -> anyhow::Result<Vec<Event>>;
+    async fn update_event(&self, event: Event) -> anyhow::Result<()>;
+    async fn delete_event(&self, id: EventId) -> anyhow::Result<()>;
 }
 
 #[async_trait]
@@ -66,6 +68,26 @@ impl EventStore for InMemoryEventStore {
             .collect();
         Ok(filtered_events)
     }
+
+    async fn update_event(&self, event: Event) -> anyhow::Result<()> {
+        let mut events = self.events.lock().await;
+        if let Some(existing_event) = events.iter_mut().find(|e| e.id == event.id) {
+            *existing_event = event;
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Event not found"))
+        }
+    }
+
+    async fn delete_event(&self, id: EventId) -> anyhow::Result<()> {
+        let mut events = self.events.lock().await;
+        if let Some(pos) = events.iter().position(|e| e.id == id) {
+            events.remove(pos);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Event not found"))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -91,6 +113,7 @@ mod tests {
             body: serde_json::json!({ "message": "Hello again!" }),
         };
 
+        // Insert events and verify they are stored correctly.
         let event_1 = store.insert_event(incoming_event_1).await?;
         let event_2 = store.insert_event(incoming_event_2).await?;
 
@@ -98,6 +121,7 @@ mod tests {
         assert_eq!(event_1.headers["Content-Type"], "application/json");
         assert_eq!(event_1.body["message"], "Hello, World!");
 
+        // Get events by ID and verify they match the inserted events.
         let fetched_event_1 = store
             .get_event(event_1.id)
             .await?
@@ -110,6 +134,7 @@ mod tests {
             .context("expected event_2 to exist in store")?;
         assert_eq!(fetched_event_2.id, event_2.id);
 
+        // List events for the webhook and verify both events are returned.
         let events = store
             .list_events(
                 "test-webhook",
@@ -120,6 +145,32 @@ mod tests {
             )
             .await?;
         assert_eq!(events.len(), 2);
+
+        // limit
+        let events_limited = store
+            .list_events(
+                "test-webhook",
+                Paging {
+                    limit: Some(1),
+                    offset: None,
+                },
+            )
+            .await?;
+        assert_eq!(events_limited.len(), 1);
+        assert_eq!(events_limited[0].id, event_1.id);
+
+        // offset
+        let events_offset = store
+            .list_events(
+                "test-webhook",
+                Paging {
+                    limit: None,
+                    offset: Some(1),
+                },
+            )
+            .await?;
+        assert_eq!(events_offset.len(), 1);
+        assert_eq!(events_offset[0].id, event_2.id);
 
         Ok(())
     }
