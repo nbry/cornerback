@@ -35,7 +35,7 @@ impl AppConfig {
         let raw = std::fs::read_to_string(path)
             .with_context(|| format!("failed to read config file: {}", path.display()))?;
 
-        let config = serde_json::from_str::<Self>(&raw)
+        let config = toml::from_str::<Self>(&raw)
             .with_context(|| format!("failed to parse config file: {}", path.display()))?;
 
         Ok(config)
