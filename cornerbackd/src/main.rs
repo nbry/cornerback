@@ -1,6 +1,8 @@
 mod app;
 mod config;
 mod error;
+mod extractors;
+mod middleware;
 mod routes;
 
 use std::net::SocketAddr;

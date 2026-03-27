@@ -1,5 +1,13 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+CREATE TABLE webhooks(
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    webhook_id text UNIQUE NOT NULL,
+    rules jsonb NOT NULL,
+);
+
+CREATE INDEX idx_webhooks_webhook_id ON webhooks(webhook_id);
+
 CREATE TABLE events(
     internal_id serial PRIMARY KEY,
     id uuid UNIQUE DEFAULT gen_random_uuid(),
