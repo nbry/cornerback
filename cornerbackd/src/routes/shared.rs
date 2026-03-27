@@ -1,12 +1,11 @@
 use std::sync::atomic::Ordering;
 
-use axum::{
-    Json,
-    http::{HeaderMap, StatusCode},
-};
+use axum::Json;
+use axum::http::HeaderMap;
 use serde::{Deserialize, Serialize};
 
 use crate::app::RouteState;
+use crate::error::ApiError;
 use cornerback_core::models::{Event, NewEvent};
 
 pub const X_CORNERBACK_REPLAY_HEADER: &str = "x-cornerback-replay";
@@ -30,10 +29,13 @@ pub async fn process_event_request(
     webhook_id: String,
     request_headers: HeaderMap,
     payload: IncomingEventPayload,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+) -> Result<Json<serde_json::Value>, ApiError> {
+    tracing::info!("processing event for webhook: {}", webhook_id);
+
     // Proxy mode: intercept is off, so just forward and return immediately.
     if !state.intercept.load(Ordering::Relaxed) {
-        let event = Event::new(webhook_id, payload.headers, payload.body);
+        tracing::debug!("proxy mode enabled, forwarding event directly");
+        let event = Event::new(webhook_id.clone(), payload.headers, payload.body);
         send_event_to_target(state, &event).await?;
         return Ok(Json(serde_json::json!({ "proxied": true })));
     }
@@ -41,19 +43,24 @@ pub async fn process_event_request(
     let replay_requested = header_flag(&request_headers, X_CORNERBACK_REPLAY_HEADER);
 
     let event = if replay_requested {
+        tracing::debug!("replay requested for webhook: {}", webhook_id);
         let event_id = payload.id.ok_or_else(|| {
-            (
-                StatusCode::BAD_REQUEST,
-                "id is required when replay header is set".to_string(),
-            )
+            tracing::warn!("replay requested but no event id provided");
+            ApiError::bad_request("id is required when replay header is set")
         })?;
 
         let mut event = state
             .store
             .get_event(event_id)
             .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-            .ok_or_else(|| (StatusCode::NOT_FOUND, "Event not found".into()))?;
+            .map_err(|e| {
+                tracing::error!("failed to fetch event {} for replay: {}", event_id, e);
+                ApiError::internal_error(e.to_string())
+            })?
+            .ok_or_else(|| {
+                tracing::warn!("event {} not found for replay", event_id);
+                ApiError::not_found("Event")
+            })?;
 
         event = event.add_header(X_CORNERBACK_REPLAY_HEADER, "true");
 
@@ -61,19 +68,27 @@ pub async fn process_event_request(
             .store
             .update_event(event.clone())
             .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            .map_err(|e| {
+                tracing::error!("failed to update event {} for replay: {}", event_id, e);
+                ApiError::internal_error(e.to_string())
+            })?;
 
+        tracing::info!("event {} replayed for webhook: {}", event_id, webhook_id);
         event
     } else {
         let event = state
             .store
             .insert_event(NewEvent {
-                webhook_id,
+                webhook_id: webhook_id.clone(),
                 headers: payload.headers,
                 body: payload.body,
             })
             .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            .map_err(|e| {
+                tracing::error!("failed to insert event for webhook {}: {}", webhook_id, e);
+                ApiError::internal_error(e.to_string())
+            })?;
+        tracing::info!("event {} inserted for webhook: {}", event.id, webhook_id);
         event
     };
 
@@ -101,7 +116,9 @@ pub fn header_flag(headers: &HeaderMap, key: &str) -> bool {
 pub async fn send_event_to_target(
     state: &RouteState,
     event: &Event,
-) -> Result<(), (StatusCode, String)> {
+) -> Result<(), ApiError> {
+    tracing::debug!("forwarding event {} to target", event.id);
+
     let mut request = state.http_client.post(&state.config.target_server.url);
 
     for (k, v) in &state.config.target_server.headers {
@@ -112,14 +129,24 @@ pub async fn send_event_to_target(
         .json(event)
         .send()
         .await
-        .map_err(|e| (StatusCode::BAD_GATEWAY, format!("target send failed: {e}")))?;
+        .map_err(|e| {
+            tracing::error!("failed to send event {} to target: {}", event.id, e);
+            ApiError::bad_gateway(format!("target send failed: {}", e))
+        })?;
 
     if response.status().is_success() {
+        tracing::info!("event {} successfully forwarded to target", event.id);
         Ok(())
     } else {
-        Err((
-            StatusCode::BAD_GATEWAY,
-            format!("target returned status {}", response.status()),
-        ))
+        let status = response.status();
+        tracing::error!(
+            "target rejected event {}: HTTP {}",
+            event.id,
+            status
+        );
+        Err(ApiError::bad_gateway(format!(
+            "target returned status {}",
+            status
+        )))
     }
 }

@@ -1,11 +1,13 @@
-use axum::{Json, extract::{Path, State}, http::StatusCode};
+use axum::{Json, extract::{Path, State}};
 
-use crate::app::RouteState;
+use crate::{app::RouteState, error::ApiError};
 
 pub async fn list_webhook_events(
     Path(webhook_id): Path<String>,
     State(state): State<RouteState>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+) -> Result<Json<serde_json::Value>, ApiError> {
+    tracing::info!("listing events for webhook: {}", webhook_id);
+
     let events = state
         .store
         .list_events(
@@ -16,7 +18,11 @@ pub async fn list_webhook_events(
             },
         )
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("database error listing events for webhook {}: {}", webhook_id, e);
+            ApiError::internal_error(e.to_string())
+        })?;
 
+    tracing::debug!("retrieved {} events for webhook: {}", events.len(), webhook_id);
     Ok(Json(serde_json::json!(events)))
 }
