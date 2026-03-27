@@ -43,7 +43,7 @@ impl EventStore for PostgresEventStore {
     async fn get_event(&self, id: EventId) -> Result<Option<Event>> {
         let rec = sqlx::query(
             r#"
-            SELECT id, webhook_id, headers, body, created_at
+            SELECT id, webhook_id, headers, body, created_at, updated_at
             FROM events WHERE id = $1
             "#,
         )

@@ -1,3 +1,5 @@
+use std::sync::atomic::Ordering;
+
 use axum::{
     Json,
     http::{HeaderMap, StatusCode},
@@ -29,6 +31,13 @@ pub async fn process_event_request(
     request_headers: HeaderMap,
     payload: IncomingEventPayload,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    // Proxy mode: intercept is off, so just forward and return immediately.
+    if !state.intercept.load(Ordering::Relaxed) {
+        let event = Event::new(webhook_id, payload.headers, payload.body);
+        send_event_to_target(state, &event).await?;
+        return Ok(Json(serde_json::json!({ "proxied": true })));
+    }
+
     let replay_requested = header_flag(&request_headers, X_CORNERBACK_REPLAY_HEADER);
 
     let event = if replay_requested {

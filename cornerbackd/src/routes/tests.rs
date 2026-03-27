@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use crate::app::RouteState;
 use crate::config::{AppConfig, EventStoreConfig, TargetServerConfig};
@@ -20,6 +21,7 @@ async fn test_handle_event() {
             send_to_target_by_default: false,
         }),
         http_client: reqwest::Client::new(),
+        intercept: Arc::new(AtomicBool::new(true)),
     };
     let app = router(route_state);
 
